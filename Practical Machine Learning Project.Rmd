@@ -1,0 +1,133 @@
+---
+title: "Practical Machine Learning Project"
+output: html_document
+author: Lucas C. Lukasiak
+---
+
+***
+
+## Project Summary and Objectives
+
+We will build a machine learning algorithm to predict activity quality from activity monitors.  The data collected comes from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.  They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+**Objectives of Project:**
+
++ Predict the maner in which the exercise was done using the **classe** variable
++ Describe how cross-validation was used to estimate error
++ Explain the expected out of sample error and the choices that were made
++ Use prediction model to predict 20 different test cases
+
+## Data Preparation and Exploratory Analysis
+
+An examination of the data shows there are several formats for nulls which we first clean on an import of the data.  We next remove columns 1-7 which don't contain useful features and also remove variables which have half or more of their values as NAs.
+
+```{r}
+library(caret, quietly=TRUE); library(ggplot2); library(randomForest)
+# https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+pmlTrain <- read.csv(file="pml-training.csv", na.strings = c("", "NA","#DIV/0!"))
+# https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+pmlTest <- read.csv(file="pml-testing.csv", na.strings = c("", "NA","#DIV/0!"))
+getNAs <- which(colMeans(is.na(pmlTrain)) > .5)
+pmlTrainClean <- pmlTrain[,-c(c(1:7), getNAs)]
+pmlTestClean <- pmlTest[,-c(c(1:7), getNAs)]
+```
+
+Now we are left with the following 53 columns which are broadly defined as the the four HAR orientation sensors (belt, arm, dumbbell, and forearm) and our classifier variable.
+
+```{r}
+names(pmlTrainClean)
+```
+
+```{r eval=FALSE, echo=FALSE}
+nearZeroVar(pmlTrainClean,saveMetrics=TRUE)
+```
+
+Next we checked if there was a need to **remove zero covariates** since variables with no or extremely low variability are not useful in creating a prediction model.  There were not any variables found with no or extremely low variability so *none needed to be eliminated*.
+
+## Model Decision and Building
+
+Here we discuss how an initial *model decision is made*.  Since this is a classification prediction exercise, we **first take a look at using Random Forests** which is widely used and considered to be quite accurate in many cases.  It should be strongly noted that random forests can bring a particular risk of overfitting and we will need to *generate our out of sample error* to help identify this.
+
+```{r}
+inTrain <- createDataPartition(y=pmlTrainClean$classe,p=0.6, list=FALSE)
+training <- pmlTrainClean[inTrain,]; testing <- pmlTrainClean[-inTrain,]
+dim(training); dim(testing)
+fitRF <- randomForest(training$classe ~ . , data = training)
+print(fitRF)
+```
+
+Our error rate of 0.63% looks like we have a good candidate model to test.
+
+## Cross Validation and Error Estimation
+
+We now predict using our 40% testing data carve-out from the traning data.
+
+```{r}
+predictRF <- predict(fitRF, testing, type = "class")
+# compare results
+confusionMatrix(predictRF, testing$classe)
+```
+
+We see here from the Confusion Matrix that the sensitivity and specificity are greater than 99% for all classes and our P-Value is < 2.2e-16.
+
+## Model Selection
+
+Our initial model developed using random forests has been shown to generate accurate predictions so we choose to keep this method and move forward with testing our predictions.  Next we predict the classe for our testing data using the random forests model which was developed.
+
+```{r}
+predictTestRF <- predict(fitRF, pmlTestClean, type = "class")
+print(predictTestRF)
+```
+
+```{r eval=FALSE, echo=FALSE}
+# Function provided for generating test case files for submission assignment
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+#answers = rep("A", 20)
+pml_write_files(predictTestRF)
+```
+
+## Conclusions
+
+Our goal was to build an accurate model to classify the quality of a user performing activity with a barbell.  A **random forests classifier** approach was chosen because of its reputation for accuracy but with the understanding that special attention needed to be paid to its risk of overfitting.  Our model was validated using a test set carve out from the training set and found to be very accurate.  This model was applied to our testing data set it achieved the correct prediction for all twenty test cases.
+
+We have a *high degree of confidence that the model we have build is ready for use on these particular candidates*.  It may also be true that this model is ready for more general use but further testing on other cohorts of individuals should be performed for further validation.
+
+***
+
+## Appendix
+
+Credit given to Groupware@LES for HAR project and data
+
+<http://groupware.les.inf.puc-rio.br/har>
+
+**Authors & Paper**
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3mqgzYlqR
+
+<http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201>
+
+```{r eval=FALSE, echo=FALSE}
+# APPENDIX
+# Code for Reference Only
+
+dim(training); dim(testing)
+# Exploratory Data Analysis
+featurePlot(x=training[,1:5],
+            y = training$classe,
+            plot="pairs")
+# Build Linear Model
+modFit<- lm(classe ~ roll_belt + pitch_belt + yaw_belt + total_accel_belt,data=training)
+finMod <- modFit$finalModel
+print(modFit)
+```
+
+
+
